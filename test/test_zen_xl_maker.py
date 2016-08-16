@@ -1,139 +1,13 @@
 # coding: utf-8
-from xlsx_handler import ExcelHandler
-from DataStructure.item_future_zen_policy import FuturePolicies
-from DataStructure.item_future_zen_policy import FutureZenPolicyItemModel
-from DataStructure.return_value import ReturnValue
-from DataStructure.matrix import Matrix
+import unittest
 
+from future_zen_policy_item_model import ZenXlsxMaker
+from future_zen_policy_item_model import FuturePolicies
+from future_zen_policy_item_model import FutureZenPolicyItemModel
 
+from xlsx_handler import openpyxl_handler
 
-class ZenXlsxMaker(ExcelHandler):
-	def __init__(self, model, filename):
-		if not isinstance(model, FuturePolicies):
-			raise TypeError
-		ExcelHandler.__init__(self, model, filename)
-
-		self.model = model
-
-		self.subtitle = (
-			'순위', '정책ID', '출발지 객체종류','출발지 객체그룹', '출발지 객체이름', '출발지 객체내용','목적지 객체종류','목적지 객체그룹', '목적지 객체이름', '목적지 객체내용',
-			'서비스그룹', '서비스객체이름', '프로토콜', '출발포트', '목적포트', '행위', '스케쥴',
-			'QoS', '세션제한', '타임아웃', '로그', 'DDoS', '애플리케이션', 'HTTP 필터링', 'IPS',
-			'안티바이러스', '안티스팸', '양방향정책', '동작', '정책유효기간', '시간', '메모', 'SSLI')
-
-		self._source_order_list = ("source_object_type","source_object_group", "source_object_name", "source_object_data",)
-
-
-	def init_subtitle(self):
-		"""최상단 각 컬럼 필드 이름 삽입"""
-		for col, value in enumerate(self.subtitle, 0):
-			self.matrix.set(0, col, value)
-		self.current_row += 1
-		return ReturnValue(True, None)
-
-
-	def _insert_item(self, item):
-		"""
-		아이템을 Sheet에 기록한다.
-		상대 좌표를 이용하여 기록
-		"""
-		m = Matrix()
-		row = 0
-		col = 0
-		end_of_row = 0
-		order = ("order_number", "policy_id", "source", "destination", "service", "action", "schedule", "QoS_limit_session",
-		         "session_limit","timeout", "log", "ddos", "applications", "http_filtering", "ips", "anti_virus", "anti_spam", "cross_policy",
-		         "use", "policy_valid_time", "date_time", "memo", "ssli",)
-
-		for o in order:
-			value = getattr(item, o)
-			if o in ("source", "destination",):
-				rtv = self._target(o, value)
-				m.set_matrix(row, col, rtv["retval"]["matrix"])
-				col += rtv["retval"]["col"]
-
-				end_of_row = rtv["retval"]["row"] if rtv["retval"]["row"] > end_of_row else end_of_row
-			elif o == "service":
-				rtv = self._service(value)
-				m.set_matrix(row, col, rtv["retval"]["matrix"])
-				col += rtv["retval"]["col"]
-				end_of_row = rtv["retval"]["row"] if rtv["retval"]["row"] > end_of_row else end_of_row
-
-			else:
-				m.set(row, col, value)
-				col += 1
-		return ReturnValue(True, {"matrix":m, "col": col, "row": end_of_row})
-
-
-	def _target(self, target, data):
-		m = Matrix()
-		row = 0
-		end_of_row = 0
-		col = 0
-		gi = 0
-		# data = [
-		# 	{
-		# 		'source_object_type': 'Any',
-		# 		'source_object_group': [
-		# 			{'group_object_name': '', 'group_object_data': '', 'group_name': ''}
-		# 		],
-		# 		'source_object_data': '',
-		# 		'source_object_name': 'Any'
-		# 	}
-		# ]
-		for item in data:
-			# 객체 종류
-			m.set(row, col, item[target + "_object_type"])
-			col += 1
-
-			# 객체 그룹
-			# 객체 종류가 Any라면 Group에 None. 아이템이 있다면
-			if "group" in item[target + "_object_type"]:
-				for i, obj_group in enumerate(item[target + "_object_group"]):
-					m.set(row + end_of_row, col, obj_group["group_name"])
-					for gi, d in enumerate(obj_group["group_object"], 1):
-						group_m = Matrix()
-						group_m.set(gi - 1, 0, d["name"])
-						group_m.set(gi - 1, 1, d["data"])
-						m.set_matrix(row + end_of_row, col + 1, group_m)
-					end_of_row += gi
-				col += 1
-			else:
-				m.set(row, col, None) # target + "_object_group"
-				col += 1
-				m.set(row, col, item[target + "_object_name"])
-				col += 1
-				m.set(row, col, item[target + "_object_data"])
-				col += 1
-		return ReturnValue(True, {"matrix":m, "col": 4, "row": end_of_row})
-
-
-	def _service(self, data):
-		m = Matrix()
-		# {'service_group': '', 'source_port': '1~65535', 'destination_port': '1~65535', 'protocol': 'tcp', 'service_object_name': 'ALL(TCP)'}
-		row = 0
-		end_of_row = 0
-		col = 0
-		gi = 0
-
-		for i, item in enumerate(data):
-			group_m = Matrix()
-			if item["service_group"]:
-				group_m.set(row + i, col, item["service_group"])
-			else:
-				group_m.set(row + i, col, "")
-			group_m.set(row + i, col + 1, item["service_object_name"]) # target + "_object_group"
-			group_m.set(row+ i, col + 2, item["protocol"])
-			group_m.set(row + i, col + 3, item["source_port"])
-			group_m.set(row + i, col + 4, item["destination_port"])
-
-			m.set_matrix(row + end_of_row, col, group_m)
-			end_of_row += i
-
-		return ReturnValue(True, {"matrix":m, "col": 5, "row": end_of_row})
-
-
-if __name__ == "__main__":
+class ZenXlszMakerValueValidTest(unittest.TestCase):
 	policies = FuturePolicies()
 	c = FutureZenPolicyItemModel()
 
@@ -364,15 +238,36 @@ if __name__ == "__main__":
 		c.destination = d
 	for d in data_['service']:
 		c.service = d
-
 	policies.append(c)
 
-	handler = ZenXlsxMaker(policies)
+
+	handler = ZenXlsxMaker(policies, "zen_policies.xlsx")
 	handler.new_workbook()
 	handler.set_sheet_name("WeGuardia_IPv4Filtering")
 	handler.convert()
 	handler.save()
 
+	sheet_handler = openpyxl_handler(filename="zen_policies.xlsx")
+	sheet_handler.load_workbook()
+
+	def test_get_sheet_names(self):
+		self.assertEqual(self.sheet_handler.get_sheet_names()['retval'], [u'WeGuardia_IPv4Filtering', u'Sheet'])
+
+	def test_get_row_number(self):
+		self.assertEqual(self.sheet_handler.get_row_number()['retval'], 11)
+
+	def test_get_col_number(self):
+		self.assertEqual(self.sheet_handler.get_col_number()['retval'], 33)
+
+	def test_get_row_values(self):
+		t = []
+		data = [[u'\uc21c\uc704', u'\uc815\ucc45ID', u'\ucd9c\ubc1c\uc9c0 \uac1d\uccb4\uc885\ub958', u'\ucd9c\ubc1c\uc9c0 \uac1d\uccb4\uadf8\ub8f9', u'\ucd9c\ubc1c\uc9c0 \uac1d\uccb4\uc774\ub984', u'\ucd9c\ubc1c\uc9c0 \uac1d\uccb4\ub0b4\uc6a9', u'\ubaa9\uc801\uc9c0 \uac1d\uccb4\uc885\ub958', u'\ubaa9\uc801\uc9c0 \uac1d\uccb4\uadf8\ub8f9', u'\ubaa9\uc801\uc9c0 \uac1d\uccb4\uc774\ub984', u'\ubaa9\uc801\uc9c0 \uac1d\uccb4\ub0b4\uc6a9', u'\uc11c\ube44\uc2a4\uadf8\ub8f9', u'\uc11c\ube44\uc2a4\uac1d\uccb4\uc774\ub984', u'\ud504\ub85c\ud1a0\ucf5c', u'\ucd9c\ubc1c\ud3ec\ud2b8', u'\ubaa9\uc801\ud3ec\ud2b8', u'\ud589\uc704', u'\uc2a4\ucf00\uc974', u'QoS', u'\uc138\uc158\uc81c\ud55c', u'\ud0c0\uc784\uc544\uc6c3', u'\ub85c\uadf8', u'DDoS', u'\uc560\ud50c\ub9ac\ucf00\uc774\uc158', u'HTTP \ud544\ud130\ub9c1', u'IPS', u'\uc548\ud2f0\ubc14\uc774\ub7ec\uc2a4', u'\uc548\ud2f0\uc2a4\ud338', u'\uc591\ubc29\ud5a5\uc815\ucc45', u'\ub3d9\uc791', u'\uc815\ucc45\uc720\ud6a8\uae30\uac04', u'\uc2dc\uac04', u'\uba54\ubaa8', u'SSLI'], [0L, 1L, u'Any', None, u'Any', None, u'Any', None, u'Any', None, None, u'Any', None, None, None, u'Allow', u'1', u'2', 300L, 600L, 0L, u'3', u'4', None, u'all', None, None, u'off', u'on', None, None, None, u'off'], [1L, 1L, u'interface', None, u'$eth2', None, u'Any', None, u'Any', None, u'service_group', u'AH', u'AH', None, None, u'Allow', u'1', u'2', 300L, 600L, 0L, u'3', u'4', None, u'all', None, None, u'off', u'on', None, None, None, u'off'], [None, None, None, None, None, None, None, None, None, None, u'service_group', u'ALL(UDP)', u'udp', u'1~65535', u'1~65535', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [1L, 1L, u'addr_group', u'dd', u'192.168.1.x', u'144.233.233.222;233.22.233.23;44.33.44.33', u'address', None, u'192.168.1.x', u'192.168.1.0/24', None, u'ALL(TCP)', u'tcp', u'1~65535', u'1~65535', u'Allow', u'1', u'2', 300L, 600L, 0L, u'3', u'4', None, u'all', None, None, u'off', u'on', None, None, None, u'off'], [None, None, None, None, u'192.168.0.x', u'2.23;44.33.44.33', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [None, None, None, None, u'192.168.4.x', u'2.23;44.33.44.33', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [None, None, None, u'ip4_group', u'1234', u'44.33.3.3', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [None, None, None, None, u'4567', u'33.3.3.3', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [None, None, None, None, u'467', u'2.2.2.2', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None], [None, None, None, None, u'457', u'1.1.1.1', None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None]]
+		for n in range(0,11):
+			t.append(self.sheet_handler.get_row_values(n)['retval'])
+		self.assertEqual(t, data)
 
 
-# WeGuardia_IPv4Filtering
+
+
+
+
