@@ -10,7 +10,10 @@ class ReturnValue(object):
 		self._rettype = type(self._retval)
 
 	def __repr__(self):
-		return {"state": self._state, "retval": self._retval, "rettype": self._rettype}
+		return str({"state": self._state, "retval": self._retval, "rettype": self._rettype})
 
 	def __getitem__(self, item):
 		return getattr(self, "_"+item)
+
+
+
