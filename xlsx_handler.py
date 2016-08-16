@@ -267,20 +267,18 @@ class ExcelHandler():
 		file_ext = self._filename[self._filename.rfind('.'):]
 		if file_ext == ".xls":
 			self._work_book = xlrd_handler(self._filename)
+			self._work_book.load_workbook()
 		elif file_ext == ".xlsx":
 			self._work_book = openpyxl_handler(self._filename)
+			self._work_book.load_workbook()
 		else:
 			raise TypeError
 
 	def read(self, row, col):
-		retval = self._work_book.get_cell_value(row, col)
-		return ReturnValue(True, retval)
+		return self._work_book.get_cell_value(row, col)['retval']
 
-	def save(self):
-		state = self._work_book.save_workbook()['state']
-		return ReturnValue(state, None)
 
-	def write(self, column, row, value):
+	def set_cell_value(self, column, row, value):
 		""""(row, col)에 데이터 삽입"""
 		self._work_book.set_cell(column=column, row=row, value=value)
 
@@ -291,7 +289,7 @@ class ExcelHandler():
 		for row, row_data in enumerate(matrix, 0):
 			for col, col_data in enumerate(row_data, 0):
 				if matrix[row][col] is None: continue
-				self.write(col + 1, row + 1, matrix[row][col])
+				self.set_cell_value(col + 1, row + 1, matrix[row][col])
 		return ReturnValue(True, None)
 
 	def write_screen(self, matrix):
@@ -307,8 +305,28 @@ class ExcelHandler():
 
 	def set_sheet_name(self, name):
 		self._work_book.set_sheet_name(name)
-		# self._work_sheet[index].title = name
 
+	def get_sheet_by_name(self, name):
+		return self._work_book.sheet_by_name(name)['retval']
+
+	def get_row_values(self, row_idx):
+		return self._work_book.get_row_values(row_idx)
+
+	@property
+	def sheets_names(self):
+		return self._work_book.get_sheet_names()['retval']
+
+	@property
+	def end_col(self):
+		return self._work_book.get_col_number()['retval']
+
+	@property
+	def end_row(self):
+		return self._work_book.get_row_number()['retval']
+
+	def save(self):
+		state = self._work_book.save_workbook()['state']
+		return ReturnValue(state, None)
 
 if __name__ == "__main__":
 	hd = xlrd_handler("test.xls")
