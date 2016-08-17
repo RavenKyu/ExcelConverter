@@ -328,8 +328,72 @@ class ExcelHandler():
 		state = self._work_book.save_workbook()['state']
 		return ReturnValue(state, None)
 
+	@staticmethod
+	def get_merged_row_cood(data):
+		"""
+		엑셀에서 머지된 row 를 구분 하여 좌표를 돌려준다.
+		:param data: [[]]
+		:return: ((0, 5), (5, 6))
+
+		>>> data = [
+		>>>	["A",0,1,2,3,4],
+		>>> [None,0,1,2,3,4],
+		>>> [None,0,1,2,3,4],
+		>>> ["B",1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> ["C",1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> [None,1,1,2,3,4],
+		>>> ]
+		>>> print data
+		"""
+		if not data[0]:
+			return ReturnValue(False, None)
+
+
+		coodination = []
+		start = 0
+		end = 0
+		for i, d in enumerate(data):
+			end = i
+			if d[0] and i != 0:
+				coodination.append((start, end))
+				start = i
+
+		coodination.append((start, end + 1))
+
+		return ReturnValue(True, tuple(coodination))
+
+
 if __name__ == "__main__":
-	hd = xlrd_handler("test.xls")
-	r = hd.get_sheet_name()
-	print r['retval']
+	ehd = ExcelHandler(None, "test.xls")
+	ehd.load()
+
+	data_map = []
+	for i in range(4, ehd.end_row):
+		data_map.append(ehd.get_row_values(i)['retval'])
+
+	coodination = ehd.get_merged_row_cood(data_map)['retval']
+
+	items = []
+	for c in coodination:
+		src = []
+		dst = []
+		svc = []
+		for d in data_map[c[0]:c[1]]:
+			src.append(d[3:7])
+			dst.append(d[7:10])
+			svc.append(d[11])
+		items.append({"src":src,"dst":dst,"svc":svc})
+
+	for item in items:
+		print item
+
+
+
+
+
 
